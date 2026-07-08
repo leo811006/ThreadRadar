@@ -4,9 +4,9 @@ namespace App\Jobs;
 
 use App\Contracts\SearchProviderInterface;
 use App\Data\SearchQuery;
+use App\Exceptions\QuotaExceededException;
 use App\Models\CrawlLog;
 use App\Models\Keyword;
-use App\Models\Post;
 use App\Services\FilterService;
 use App\Services\PostUpsertService;
 use App\Support\KeywordTimeRangeResolver;
@@ -19,7 +19,8 @@ use Throwable;
 
 /**
  * 巡檢主流程（docs/04-system-architecture.md §3）：
- * 配額檢查 → 呼叫 SearchProvider → 逐篇去重 upsert → 門檻比對 → 首次達標則 dispatch 通知 Job。
+ * 呼叫 SearchProvider（配額檢查與保留在其內部以原子操作完成）→ 逐篇去重 upsert →
+ * 門檻比對 → 首次達標則 dispatch 通知 Job。
  */
 class CrawlKeywordJob implements ShouldQueue
 {
@@ -44,23 +45,26 @@ class CrawlKeywordJob implements ShouldQueue
         $keyword = Keyword::with('thresholds')->findOrFail($this->keywordId);
         $startedAt = Date::now();
 
-        $remainingQuota = $searchProvider->remainingQuota();
+        // 在實際呼叫外部 API 前先寫入 last_crawled_at：search() 可能因外部服務延遲而
+        // 耗時超過 crawl_interval_min，若等到 handle() 結尾才更新，Scheduler 每分鐘的
+        // 到期判斷會在這段等待期間誤判「仍然到期」而重複 dispatch 同一關鍵字。
+        $keyword->update(['last_crawled_at' => $startedAt]);
 
-        if ($remainingQuota !== null && $remainingQuota <= 0) {
-            $this->logCrawl($keyword, 'quota_exceeded', startedAt: $startedAt);
+        try {
+            $query = new SearchQuery(
+                keyword: $keyword->name,
+                since: $timeRangeResolver->resolveSince($keyword),
+                until: $timeRangeResolver->resolveUntil($keyword),
+            );
+
+            $results = $searchProvider->search($query);
+        } catch (QuotaExceededException $e) {
+            // 配額用盡不是暫時性錯誤，不重試（重試在同一天內必然再次失敗），
+            // 交由下一輪排程等配額於 UTC 午夜重置後自然恢復。
+            $this->logCrawl($keyword, 'quota_exceeded', startedAt: $startedAt, errorMessage: $e->getMessage());
             Log::warning("CrawlKeywordJob skipped for keyword #{$keyword->id}: daily quota exceeded.");
 
             return;
-        }
-
-        $query = new SearchQuery(
-            keyword: $keyword->name,
-            since: $timeRangeResolver->resolveSince($keyword),
-            until: $timeRangeResolver->resolveUntil($keyword),
-        );
-
-        try {
-            $results = $searchProvider->search($query);
         } catch (Throwable $e) {
             $this->logCrawl($keyword, 'failed', startedAt: $startedAt, errorMessage: $e->getMessage());
 
@@ -71,11 +75,9 @@ class CrawlKeywordJob implements ShouldQueue
         $postsUpdated = 0;
 
         foreach ($results as $postData) {
-            $existedBefore = Post::where('threads_url', $postData->threadsUrl)->exists();
-
             $post = $postUpsertService->upsert($postData);
 
-            $existedBefore ? $postsUpdated++ : $postsCreated++;
+            $post->wasRecentlyCreated ? $postsCreated++ : $postsUpdated++;
 
             if ($filterService->matchesThreshold($postData, $keyword)) {
                 $match = $post->keywordMatches()->firstOrCreate(
@@ -88,8 +90,6 @@ class CrawlKeywordJob implements ShouldQueue
                 }
             }
         }
-
-        $keyword->update(['last_crawled_at' => Date::now()]);
 
         $this->logCrawl(
             $keyword,

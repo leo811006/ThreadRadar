@@ -17,9 +17,9 @@ class PostUpsertService
         $now = Date::now();
 
         $post = Post::firstOrNew(['threads_url' => $data->threadsUrl]);
-        $wasRecentlyCreated = ! $post->exists;
+        $isNewPost = ! $post->exists;
 
-        if ($wasRecentlyCreated) {
+        if ($isNewPost) {
             $post->author_name = $data->authorName;
             $post->author_username = $data->authorUsername;
             $post->posted_at = $data->postedAt;
@@ -47,6 +47,11 @@ class PostUpsertService
             'quotes_count' => $data->quotesCount,
             'recorded_at' => $now,
         ]);
+
+        // save() 之後 Eloquent 的 wasRecentlyCreated 才具語意，於此時機點賦值可靠地
+        // 讓呼叫端（CrawlKeywordJob）直接讀取 $post->wasRecentlyCreated 判斷是否為新文章，
+        // 不需要再對同一張表額外查一次 exists()。
+        $post->wasRecentlyCreated = $isNewPost;
 
         return $post;
     }

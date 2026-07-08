@@ -114,3 +114,47 @@ it('deletes a keyword', function () {
 
     expect(Keyword::find($keyword->id))->toBeNull();
 });
+
+it('preserves existing notification channel config when updating without providing a new config', function () {
+    $keyword = Keyword::factory()->create();
+    $channel = $keyword->notificationChannels()->create([
+        'channel_type' => 'discord',
+        'config' => ['webhook_url' => 'https://discord.example/secret-webhook'],
+        'is_active' => true,
+    ]);
+
+    // Simulates the SPA edit flow: config is masked to '******' in API responses,
+    // so the frontend cannot round-trip the real value and must send an empty
+    // config for channels the user didn't touch. Matching by id must preserve
+    // the original secret rather than wiping it to an empty object.
+    $this->actingAs($this->user, 'sanctum')
+        ->putJson("/api/keywords/{$keyword->id}", [
+            'notification_channels' => [
+                ['id' => $channel->id, 'channel_type' => 'discord', 'config' => [], 'is_active' => true],
+            ],
+        ])
+        ->assertSuccessful();
+
+    $preserved = $keyword->notificationChannels()->first();
+    expect($preserved->config)->toBe(['webhook_url' => 'https://discord.example/secret-webhook']);
+});
+
+it('overwrites notification channel config when a new non-empty config is provided', function () {
+    $keyword = Keyword::factory()->create();
+    $channel = $keyword->notificationChannels()->create([
+        'channel_type' => 'discord',
+        'config' => ['webhook_url' => 'https://discord.example/old-webhook'],
+        'is_active' => true,
+    ]);
+
+    $this->actingAs($this->user, 'sanctum')
+        ->putJson("/api/keywords/{$keyword->id}", [
+            'notification_channels' => [
+                ['id' => $channel->id, 'channel_type' => 'discord', 'config' => ['webhook_url' => 'https://discord.example/new-webhook'], 'is_active' => true],
+            ],
+        ])
+        ->assertSuccessful();
+
+    $updated = $keyword->notificationChannels()->first();
+    expect($updated->config)->toBe(['webhook_url' => 'https://discord.example/new-webhook']);
+});

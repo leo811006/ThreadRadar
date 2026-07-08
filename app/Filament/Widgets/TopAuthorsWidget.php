@@ -2,7 +2,7 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Post;
+use App\Services\DashboardService;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget;
@@ -15,11 +15,7 @@ class TopAuthorsWidget extends TableWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn (): Builder => Post::query()
-                ->selectRaw('author_username, MAX(author_name) as author_name, COUNT(*) as post_count, SUM(' . Post::HOTNESS_SCORE_EXPRESSION . ') as total_hotness')
-                ->groupBy('author_username')
-                ->orderByDesc('total_hotness')
-                ->limit(20))
+            ->query(fn (): Builder => app(DashboardService::class)->topAuthorsQuery(20))
             ->defaultKeySort(false)
             ->paginated(false)
             ->columns([

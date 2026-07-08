@@ -52,7 +52,7 @@ function removeThreshold(index) {
 }
 
 function addChannel() {
-    form.value.notification_channels.push({ channel_type: 'discord', config: {}, is_active: true, configText: '' });
+    form.value.notification_channels.push({ id: null, channel_type: 'discord', config: {}, is_active: true, configText: '' });
 }
 
 function removeChannel(index) {
@@ -73,8 +73,10 @@ async function load() {
         time_range_custom_from: keyword.time_range_custom_from ?? '',
         time_range_custom_to: keyword.time_range_custom_to ?? '',
         thresholds: keyword.thresholds.map((t) => ({ metric: t.metric, operator: t.operator, value: t.value })),
-        // config 在 API 回應中已遮蔽，編輯既有管道時需重新輸入設定值才會更新
+        // config 在 API 回應中已遮蔽為 '******'，configText 留空表示「不修改」。
+        // id 一併保留，後端會依 id 比對既有管道，未提供新設定值時保留資料庫現有 config。
         notification_channels: keyword.notification_channels.map((c) => ({
+            id: c.id,
             channel_type: c.channel_type,
             is_active: c.is_active,
             config: {},
@@ -87,18 +89,33 @@ async function submit() {
     errors.value = {};
     saving.value = true;
 
-    const payload = {
-        ...form.value,
-        notification_channels: form.value.notification_channels.map((c) => {
-            let config = {};
+    const invalidChannelIndexes = [];
+
+    const notificationChannels = form.value.notification_channels.map((c, index) => {
+        let config = {};
+
+        if (c.configText) {
             try {
-                config = c.configText ? JSON.parse(c.configText) : {};
+                config = JSON.parse(c.configText);
             } catch {
-                config = {};
+                invalidChannelIndexes.push(index);
             }
-            return { channel_type: c.channel_type, is_active: c.is_active, config };
-        }),
-    };
+        }
+
+        return { id: c.id ?? undefined, channel_type: c.channel_type, is_active: c.is_active, config };
+    });
+
+    if (invalidChannelIndexes.length) {
+        errors.value = {
+            notification_channels: [
+                `第 ${invalidChannelIndexes.map((i) => i + 1).join('、')} 個通知管道的設定值不是合法的 JSON 格式，請修正後再儲存。`,
+            ],
+        };
+        saving.value = false;
+        return;
+    }
+
+    const payload = { ...form.value, notification_channels: notificationChannels };
 
     try {
         if (isEdit.value) {
@@ -217,9 +234,11 @@ onMounted(load);
                         placeholder='設定值（JSON 格式），例如 {"webhook_url": "https://..."}'
                         class="w-full text-sm rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono"
                     />
+                    <p v-if="isEdit && channel.id" class="text-xs text-gray-400">留空表示保留原設定值不變更</p>
                 </div>
 
                 <p v-if="!form.notification_channels.length" class="text-sm text-gray-400">尚未設定通知管道</p>
+                <p v-if="errors.notification_channels" class="text-sm text-red-600">{{ errors.notification_channels[0] }}</p>
             </div>
 
             <div class="flex items-center gap-3">

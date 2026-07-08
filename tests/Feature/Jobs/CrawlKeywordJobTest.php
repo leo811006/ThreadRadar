@@ -135,7 +135,11 @@ it('skips crawling and logs quota_exceeded when daily quota is depleted', functi
 
     $keyword = Keyword::factory()->create(['name' => 'iPhone']);
 
-    bindFakeProvider([], quota: 0);
+    // 配額保留現在於 SearchProviderInterface::search() 內部以原子操作完成（見
+    // ThreadsApiSearchProvider 的 Lua script），而非事先呼叫 remainingQuota() 檢查，
+    // 故此處透過 setQuotaExceeded() 讓 search() 真正拋出 QuotaExceededException 來測試。
+    $fake = bindFakeProvider([]);
+    $fake->setQuotaExceeded();
 
     (new CrawlKeywordJob($keyword->id))->handle(
         app(SearchProviderInterface::class),
@@ -148,6 +152,24 @@ it('skips crawling and logs quota_exceeded when daily quota is depleted', functi
         ->and(CrawlLog::where('status', 'quota_exceeded')->count())->toBe(1);
 
     Queue::assertNotPushed(SendNotificationJob::class);
+});
+
+it('does not retry the job when quota is exceeded (returns instead of throwing)', function () {
+    $keyword = Keyword::factory()->create(['name' => 'iPhone']);
+
+    $fake = bindFakeProvider([]);
+    $fake->setQuotaExceeded();
+
+    // handle() 對 QuotaExceededException 應該 return 而非 throw，
+    // 若這裡拋出例外，Pest 會直接讓測試失敗，等同斷言「不會 throw」。
+    (new CrawlKeywordJob($keyword->id))->handle(
+        app(SearchProviderInterface::class),
+        app(App\Support\KeywordTimeRangeResolver::class),
+        app(App\Services\PostUpsertService::class),
+        app(App\Services\FilterService::class),
+    );
+
+    expect($keyword->fresh()->last_crawled_at)->not->toBeNull();
 });
 
 it('records a crawl log on successful crawl', function () {

@@ -4,12 +4,12 @@ namespace App\Services;
 
 use App\Contracts\NotificationChannelInterface;
 use App\Data\NotificationPayload;
-use App\Exceptions\NotificationDeliveryException;
 use App\Models\Post;
 use App\Models\PostKeywordMatch;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use Throwable;
 
 /**
  * 「首次達標只通知一次」的權威實作：以 post_keyword_matches.notified_at 作為持久化去重標記，
@@ -64,7 +64,11 @@ class NotificationService
                 'payload' => $payload->toArray(),
                 'sent_at' => Date::now(),
             ]);
-        } catch (NotificationDeliveryException $e) {
+        } catch (Throwable $e) {
+            // 捕捉所有例外型別（不只 NotificationDeliveryException）：HTTP client 的連線逾時／
+            // DNS 失敗等會拋出 ConnectionException，郵件 transport 失敗會拋出各自的例外型別，
+            // 若讓這些穿透，會中斷 foreach 導致後續管道完全不會被嘗試，且 notified_at 不會被
+            // 寫入，造成已成功的管道在 Job 重試時被重複通知。單一管道失敗只記錄，不影響其他管道。
             Log::warning("Notification delivery failed via {$channelType}: {$e->getMessage()}");
 
             $match->notificationLogs()->create([

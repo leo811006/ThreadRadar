@@ -6,6 +6,7 @@ use App\Models\CrawlLog;
 use App\Models\Keyword;
 use App\Models\NotificationLog;
 use App\Models\Post;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Date;
@@ -64,14 +65,25 @@ class DashboardService
      */
     public function topAuthors(int $limit = 20): Collection
     {
-        return Cache::remember("dashboard:top_authors:{$limit}", self::CACHE_TTL_SECONDS, function () use ($limit) {
-            return Post::query()
-                ->selectRaw('author_username, MAX(author_name) as author_name, COUNT(*) as post_count, SUM(' . Post::HOTNESS_SCORE_EXPRESSION . ') as total_hotness')
-                ->groupBy('author_username')
-                ->orderByDesc('total_hotness')
-                ->limit($limit)
-                ->get();
-        });
+        return Cache::remember(
+            "dashboard:top_authors:{$limit}",
+            self::CACHE_TTL_SECONDS,
+            fn () => $this->topAuthorsQuery($limit)->get(),
+        );
+    }
+
+    /**
+     * 供需要自行掌控查詢執行時機的呼叫端使用（例如 Filament TableWidget 需要一個
+     * 未執行的 Builder 交給元件內部處理），與 topAuthors() 共用同一段聚合邏輯，
+     * 避免兩處各自維護一份幾乎相同的 selectRaw 字串而彼此不同步。
+     */
+    public function topAuthorsQuery(int $limit = 20): Builder
+    {
+        return Post::query()
+            ->selectRaw('author_username, MAX(author_name) as author_name, COUNT(*) as post_count, SUM(' . Post::HOTNESS_SCORE_EXPRESSION . ') as total_hotness')
+            ->groupBy('author_username')
+            ->orderByDesc('total_hotness')
+            ->limit($limit);
     }
 
     /**
