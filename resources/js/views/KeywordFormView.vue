@@ -43,8 +43,28 @@ const channelTypeOptions = [
     { value: 'webhook', label: 'Webhook' },
 ];
 
-function addThreshold() {
-    form.value.thresholds.push({ metric: 'views', operator: '>=', value: 1000 });
+const thresholdGroups = computed(() => {
+    const groups = new Map();
+    form.value.thresholds.forEach((threshold, index) => {
+        const group = threshold.group ?? 0;
+        if (!groups.has(group)) {
+            groups.set(group, []);
+        }
+        groups.get(group).push(index);
+    });
+    return [...groups.entries()].sort((a, b) => a[0] - b[0]);
+});
+
+function nextGroupNumber() {
+    return form.value.thresholds.reduce((max, t) => Math.max(max, t.group ?? 0), -1) + 1;
+}
+
+function addThresholdGroup() {
+    form.value.thresholds.push({ metric: 'views', operator: '>=', value: 1000, group: nextGroupNumber() });
+}
+
+function addThresholdToGroup(group) {
+    form.value.thresholds.push({ metric: 'views', operator: '>=', value: 1000, group });
 }
 
 function removeThreshold(index) {
@@ -72,7 +92,7 @@ async function load() {
         time_range_type: keyword.time_range_type,
         time_range_custom_from: keyword.time_range_custom_from ?? '',
         time_range_custom_to: keyword.time_range_custom_to ?? '',
-        thresholds: keyword.thresholds.map((t) => ({ metric: t.metric, operator: t.operator, value: t.value })),
+        thresholds: keyword.thresholds.map((t) => ({ metric: t.metric, operator: t.operator, value: t.value, group: t.group ?? 0 })),
         // config 在 API 回應中已遮蔽為 '******'，configText 留空表示「不修改」。
         // id 一併保留，後端會依 id 比對既有管道，未提供新設定值時保留資料庫現有 config。
         notification_channels: keyword.notification_channels.map((c) => ({
@@ -190,21 +210,39 @@ onMounted(load);
 
             <div class="rounded-lg bg-white dark:bg-gray-800 shadow p-4 space-y-3">
                 <div class="flex items-center justify-between">
-                    <h2 class="font-semibold text-gray-900 dark:text-white">熱門度門檻（全部須同時符合）</h2>
-                    <button type="button" class="text-sm text-indigo-600 hover:underline" @click="addThreshold">
-                        + 新增條件
+                    <div>
+                        <h2 class="font-semibold text-gray-900 dark:text-white">熱門度門檻</h2>
+                        <p class="text-xs text-gray-400">同一組內條件須同時符合（AND），任一組全數符合即算命中（組間 OR）</p>
+                    </div>
+                    <button type="button" class="text-sm text-indigo-600 hover:underline" @click="addThresholdGroup">
+                        + 新增條件組
                     </button>
                 </div>
 
-                <div v-for="(threshold, index) in form.thresholds" :key="index" class="flex items-center gap-2">
-                    <select v-model="threshold.metric" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option v-for="option in metricOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-                    </select>
-                    <select v-model="threshold.operator" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                        <option v-for="op in operatorOptions" :key="op" :value="op">{{ op }}</option>
-                    </select>
-                    <input v-model.number="threshold.value" type="number" min="0" class="w-32 rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                    <button type="button" class="text-sm text-red-600 hover:underline" @click="removeThreshold(index)">移除</button>
+                <div
+                    v-for="([group, indexes], groupIndex) in thresholdGroups"
+                    :key="group"
+                    class="rounded border border-gray-200 dark:border-gray-600 p-3 space-y-2"
+                >
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                            第 {{ groupIndex + 1 }} 組{{ groupIndex > 0 ? '（或）' : '' }}
+                        </span>
+                        <button type="button" class="text-xs text-indigo-600 hover:underline" @click="addThresholdToGroup(group)">
+                            + 加入此組條件
+                        </button>
+                    </div>
+
+                    <div v-for="index in indexes" :key="index" class="flex items-center gap-2">
+                        <select v-model="form.thresholds[index].metric" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option v-for="option in metricOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+                        </select>
+                        <select v-model="form.thresholds[index].operator" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                            <option v-for="op in operatorOptions" :key="op" :value="op">{{ op }}</option>
+                        </select>
+                        <input v-model.number="form.thresholds[index].value" type="number" min="0" class="w-32 rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        <button type="button" class="text-sm text-red-600 hover:underline" @click="removeThreshold(index)">移除</button>
+                    </div>
                 </div>
 
                 <p v-if="!form.thresholds.length" class="text-sm text-gray-400">未設定門檻條件時，所有符合關鍵字的文章都會通過篩選</p>
