@@ -8,7 +8,11 @@ use App\Models\KeywordThreshold;
 use InvalidArgumentException;
 
 /**
- * 判斷一篇貼文是否符合關鍵字設定的全部熱門度門檻（AND 邏輯）。
+ * 判斷一篇貼文是否符合關鍵字設定的熱門度門檻。
+ *
+ * 門檻以 group 分組：同一 group 內為 AND，不同 group 之間為 OR
+ * （例：group 0 = 「likes >= 500」、group 1 = 「likes >= 300 AND replies >= 10」，
+ * 只要任一 group 全數符合即算命中）。
  */
 class FilterService
 {
@@ -20,9 +24,13 @@ class FilterService
             return true;
         }
 
-        return $thresholds->every(
-            fn (KeywordThreshold $threshold) => $this->matchesSingleThreshold($post, $threshold)
-        );
+        return $thresholds
+            ->groupBy('group')
+            ->contains(
+                fn ($groupThresholds) => $groupThresholds->every(
+                    fn (KeywordThreshold $threshold) => $this->matchesSingleThreshold($post, $threshold)
+                )
+            );
     }
 
     private function matchesSingleThreshold(PostData $post, KeywordThreshold $threshold): bool

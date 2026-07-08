@@ -11,12 +11,14 @@ return new class extends Migration
         Schema::create('keyword_thresholds', function (Blueprint $table) {
             $table->id();
             $table->foreignId('keyword_id')->constrained()->cascadeOnDelete();
+            $table->unsignedInteger('group')->default(0);
             $table->enum('metric', ['views', 'likes', 'replies', 'reposts', 'quotes']);
             $table->enum('operator', ['>', '>=', '=', '<', '<=']);
             $table->unsignedBigInteger('value');
             $table->timestamps();
 
             $table->index('keyword_id');
+            $table->index(['keyword_id', 'group']);
         });
     }
 

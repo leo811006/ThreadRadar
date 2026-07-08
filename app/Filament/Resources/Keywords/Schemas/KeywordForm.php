@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Keywords\Schemas;
 
+use App\Models\KeywordThreshold;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Repeater;
@@ -59,41 +60,80 @@ class KeywordForm
                     ]),
 
                 Section::make('熱門度門檻')
-                    ->description('全部條件須同時符合（AND 邏輯）')
+                    ->description('組間為 OR、組內為 AND：任一組內的條件全數符合即算命中（例如「likes>=500」一組，「likes>=300 且 replies>=10」另一組）')
                     ->components([
                         Repeater::make('thresholds')
-                            ->relationship()
-                            ->label('門檻條件')
-                            ->columns(3)
+                            ->label('門檻組')
+                            ->columns(1)
                             ->components([
-                                Select::make('metric')
-                                    ->label('指標')
-                                    ->options([
-                                        'views' => 'Views',
-                                        'likes' => 'Likes',
-                                        'replies' => 'Replies',
-                                        'reposts' => 'Reposts',
-                                        'quotes' => 'Quotes',
+                                Repeater::make('conditions')
+                                    ->label('組內條件（AND）')
+                                    ->columns(3)
+                                    ->minItems(1)
+                                    ->components([
+                                        Select::make('metric')
+                                            ->label('指標')
+                                            ->options([
+                                                'views' => 'Views',
+                                                'likes' => 'Likes',
+                                                'replies' => 'Replies',
+                                                'reposts' => 'Reposts',
+                                                'quotes' => 'Quotes',
+                                            ])
+                                            ->required(),
+                                        Select::make('operator')
+                                            ->label('運算子')
+                                            ->options([
+                                                '>' => '>',
+                                                '>=' => '>=',
+                                                '=' => '=',
+                                                '<' => '<',
+                                                '<=' => '<=',
+                                            ])
+                                            ->required(),
+                                        TextInput::make('value')
+                                            ->label('數值')
+                                            ->numeric()
+                                            ->minValue(0)
+                                            ->required(),
                                     ])
-                                    ->required(),
-                                Select::make('operator')
-                                    ->label('運算子')
-                                    ->options([
-                                        '>' => '>',
-                                        '>=' => '>=',
-                                        '=' => '=',
-                                        '<' => '<',
-                                        '<=' => '<=',
-                                    ])
-                                    ->required(),
-                                TextInput::make('value')
-                                    ->label('數值')
-                                    ->numeric()
-                                    ->minValue(0)
-                                    ->required(),
+                                    ->addActionLabel('新增條件')
+                                    ->defaultItems(1),
                             ])
-                            ->addActionLabel('新增門檻條件')
-                            ->defaultItems(0),
+                            ->addActionLabel('新增門檻組（OR）')
+                            ->defaultItems(0)
+                            ->dehydrateStateUsing(fn (array $state) => collect($state)
+                                ->map(fn (array $group) => collect($group['conditions'] ?? []))
+                                ->reject(fn ($conditions) => $conditions->isEmpty())
+                                ->values()
+                                ->flatMap(
+                                    fn ($conditions, int $groupIndex) => $conditions
+                                        ->map(fn (array $condition) => [...$condition, 'group' => $groupIndex])
+                                )
+                                ->all())
+                            ->afterStateHydrated(function (Repeater $component, $state) {
+                                $thresholds = $component->getRecord()?->thresholds;
+
+                                if ($thresholds === null || $thresholds->isEmpty()) {
+                                    return;
+                                }
+
+                                $component->state(
+                                    $thresholds
+                                        ->groupBy('group')
+                                        ->values()
+                                        ->map(fn ($conditions) => [
+                                            'conditions' => $conditions
+                                                ->map(fn (KeywordThreshold $t) => [
+                                                    'metric' => $t->metric,
+                                                    'operator' => $t->operator,
+                                                    'value' => $t->value,
+                                                ])
+                                                ->all(),
+                                        ])
+                                        ->all()
+                                );
+                            }),
                     ]),
 
                 Section::make('通知管道')

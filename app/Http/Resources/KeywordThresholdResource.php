@@ -14,6 +14,7 @@ class KeywordThresholdResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'group' => $this->group,
             'metric' => $this->metric,
             'operator' => $this->operator,
             'value' => $this->value,

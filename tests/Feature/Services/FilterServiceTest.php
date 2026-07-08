@@ -76,10 +76,10 @@ it('matches a single less-than-or-equal threshold correctly', function () {
     expect($this->filterService->matchesThreshold(makePostData(['quotesCount' => 21]), $keyword))->toBeFalse();
 });
 
-it('requires all thresholds to match (AND logic)', function () {
+it('requires all thresholds within the same group to match (AND logic)', function () {
     $keyword = Keyword::factory()->create();
-    $keyword->thresholds()->create(['metric' => 'views', 'operator' => '>=', 'value' => 10000]);
-    $keyword->thresholds()->create(['metric' => 'likes', 'operator' => '>=', 'value' => 500]);
+    $keyword->thresholds()->create(['group' => 0, 'metric' => 'views', 'operator' => '>=', 'value' => 10000]);
+    $keyword->thresholds()->create(['group' => 0, 'metric' => 'likes', 'operator' => '>=', 'value' => 500]);
 
     // Both satisfied
     expect($this->filterService->matchesThreshold(
@@ -96,6 +96,41 @@ it('requires all thresholds to match (AND logic)', function () {
     // Neither satisfied
     expect($this->filterService->matchesThreshold(
         makePostData(['viewsCount' => 1, 'likesCount' => 1]),
+        $keyword
+    ))->toBeFalse();
+});
+
+it('matches if any threshold group is fully satisfied (OR logic across groups)', function () {
+    $keyword = Keyword::factory()->create();
+
+    // Group 0: likes >= 500 (single condition)
+    $keyword->thresholds()->create(['group' => 0, 'metric' => 'likes', 'operator' => '>=', 'value' => 500]);
+
+    // Group 1: likes >= 300 AND replies >= 10
+    $keyword->thresholds()->create(['group' => 1, 'metric' => 'likes', 'operator' => '>=', 'value' => 300]);
+    $keyword->thresholds()->create(['group' => 1, 'metric' => 'replies', 'operator' => '>=', 'value' => 10]);
+
+    // Satisfies group 0 only
+    expect($this->filterService->matchesThreshold(
+        makePostData(['likesCount' => 500, 'repliesCount' => 0]),
+        $keyword
+    ))->toBeTrue();
+
+    // Satisfies group 1 only
+    expect($this->filterService->matchesThreshold(
+        makePostData(['likesCount' => 300, 'repliesCount' => 10]),
+        $keyword
+    ))->toBeTrue();
+
+    // Satisfies neither group (group 1 partially satisfied only)
+    expect($this->filterService->matchesThreshold(
+        makePostData(['likesCount' => 300, 'repliesCount' => 9]),
+        $keyword
+    ))->toBeFalse();
+
+    // Satisfies neither group at all
+    expect($this->filterService->matchesThreshold(
+        makePostData(['likesCount' => 1, 'repliesCount' => 0]),
         $keyword
     ))->toBeFalse();
 });

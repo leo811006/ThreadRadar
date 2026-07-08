@@ -26,6 +26,7 @@ class UpdateKeywordRequest extends FormRequest
             'time_range_custom_to' => ['nullable', 'date', 'after_or_equal:time_range_custom_from'],
 
             'thresholds' => ['sometimes', 'array'],
+            'thresholds.*.group' => ['nullable', 'integer', 'min:0'],
             'thresholds.*.metric' => ['required_with:thresholds', 'in:views,likes,replies,reposts,quotes'],
             'thresholds.*.operator' => ['required_with:thresholds', 'in:>,>=,=,<,<='],
             'thresholds.*.value' => ['required_with:thresholds', 'integer', 'min:0'],

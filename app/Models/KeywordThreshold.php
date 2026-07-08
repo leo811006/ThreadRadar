@@ -12,6 +12,7 @@ class KeywordThreshold extends Model
 
     protected $fillable = [
         'keyword_id',
+        'group',
         'metric',
         'operator',
         'value',
@@ -20,6 +21,7 @@ class KeywordThreshold extends Model
     protected function casts(): array
     {
         return [
+            'group' => 'integer',
             'value' => 'integer',
         ];
     }

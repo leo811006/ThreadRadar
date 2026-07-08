@@ -20,6 +20,7 @@ class KeywordThresholdFactory extends Factory
     {
         return [
             'keyword_id' => Keyword::factory(),
+            'group' => 0,
             'metric' => $this->faker->randomElement(['views', 'likes', 'replies', 'reposts', 'quotes']),
             'operator' => $this->faker->randomElement(['>', '>=', '=', '<', '<=']),
             'value' => $this->faker->numberBetween(10, 100000),
