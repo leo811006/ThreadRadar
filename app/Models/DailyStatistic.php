@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\DateOnlyCast;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,7 +21,7 @@ class DailyStatistic extends Model
     protected function casts(): array
     {
         return [
-            'date' => 'date',
+            'date' => DateOnlyCast::class,
             'search_count' => 'integer',
             'new_posts_count' => 'integer',
             'updated_posts_count' => 'integer',

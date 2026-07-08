@@ -17,6 +17,18 @@ class SpyChannel implements NotificationChannelInterface
     }
 }
 
+class FailingChannel implements NotificationChannelInterface
+{
+    public int $callCount = 0;
+
+    public function send(NotificationPayload $payload, array $config): void
+    {
+        $this->callCount++;
+
+        throw new RuntimeException('simulated delivery failure');
+    }
+}
+
 it('sends notification and marks notified_at when first matched', function () {
     $spy = new SpyChannel();
     $service = new NotificationService(['discord' => $spy]);
@@ -136,4 +148,63 @@ it('dispatches to multiple active channels independently', function () {
 
     expect($discordSpy->callCount)->toBe(1)
         ->and($slackSpy->callCount)->toBe(1);
+});
+
+it('continues to other channels and still marks notified when one channel fails', function () {
+    $failingSpy = new FailingChannel();
+    $workingSpy = new SpyChannel();
+    $service = new NotificationService(['discord' => $failingSpy, 'slack' => $workingSpy]);
+
+    $keyword = Keyword::factory()->create();
+    $keyword->notificationChannels()->create([
+        'channel_type' => 'discord',
+        'config' => ['webhook_url' => 'https://discord.example/webhook'],
+        'is_active' => true,
+    ]);
+    $keyword->notificationChannels()->create([
+        'channel_type' => 'slack',
+        'config' => ['webhook_url' => 'https://slack.example/webhook'],
+        'is_active' => true,
+    ]);
+
+    $post = Post::factory()->create();
+    $match = $post->keywordMatches()->create([
+        'keyword_id' => $keyword->id,
+        'matched_at' => now(),
+    ]);
+
+    $result = $service->notifyIfNotAlreadyNotified($post, $match);
+
+    expect($result)->toBeTrue()
+        ->and($failingSpy->callCount)->toBe(1)
+        ->and($workingSpy->callCount)->toBe(1)
+        ->and($match->fresh()->notified_at)->not->toBeNull()
+        ->and(NotificationLog::where('status', 'failed')->where('channel_type', 'discord')->exists())->toBeTrue()
+        ->and(NotificationLog::where('status', 'sent')->where('channel_type', 'slack')->exists())->toBeTrue();
+});
+
+it('does not create a sent log for the failing channel and records its error message', function () {
+    $failingSpy = new FailingChannel();
+    $service = new NotificationService(['discord' => $failingSpy]);
+
+    $keyword = Keyword::factory()->create();
+    $keyword->notificationChannels()->create([
+        'channel_type' => 'discord',
+        'config' => ['webhook_url' => 'https://discord.example/webhook'],
+        'is_active' => true,
+    ]);
+
+    $post = Post::factory()->create();
+    $match = $post->keywordMatches()->create([
+        'keyword_id' => $keyword->id,
+        'matched_at' => now(),
+    ]);
+
+    $service->notifyIfNotAlreadyNotified($post, $match);
+
+    $log = NotificationLog::where('channel_type', 'discord')->first();
+
+    expect($log->status)->toBe('failed')
+        ->and($log->error_message)->toBe('simulated delivery failure')
+        ->and(NotificationLog::where('status', 'sent')->count())->toBe(0);
 });

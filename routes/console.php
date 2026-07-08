@@ -11,3 +11,7 @@ Artisan::command('inspire', function () {
 Schedule::command('app:dispatch-due-crawls')
     ->everyMinute()
     ->withoutOverlapping();
+
+Schedule::command('app:aggregate-daily-statistics')
+    ->dailyAt('00:10')
+    ->withoutOverlapping();

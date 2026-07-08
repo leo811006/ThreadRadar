@@ -6,6 +6,7 @@ use App\Filament\Widgets\TodayStatsOverview;
 use App\Filament\Widgets\TopAuthorsWidget;
 use App\Filament\Widgets\TopKeywordsWidget;
 use App\Filament\Widgets\TopPostsWidget;
+use App\Filament\Widgets\TrendChartWidget;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -45,6 +46,7 @@ class AdminPanelProvider extends PanelProvider
                 TopPostsWidget::class,
                 TopAuthorsWidget::class,
                 TopKeywordsWidget::class,
+                TrendChartWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

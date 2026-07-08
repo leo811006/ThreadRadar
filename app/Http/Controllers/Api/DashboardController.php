@@ -31,6 +31,13 @@ class DashboardController extends Controller
                     'name' => $keyword->name,
                     'post_count' => $keyword->post_matches_count,
                 ]),
+                'trends' => $dashboard->trends()->map(fn ($stat) => [
+                    'date' => $stat->date->toDateString(),
+                    'search_count' => $stat->search_count,
+                    'new_posts_count' => $stat->new_posts_count,
+                    'updated_posts_count' => $stat->updated_posts_count,
+                    'notification_count' => $stat->notification_count,
+                ]),
             ],
         ]);
     }

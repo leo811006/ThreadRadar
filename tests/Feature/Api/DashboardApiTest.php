@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\CrawlLog;
+use App\Models\DailyStatistic;
 use App\Models\Keyword;
 use App\Models\NotificationLog;
 use App\Models\Post;
@@ -88,4 +89,64 @@ it('returns top keywords ordered by matched post count', function () {
 
     expect($response->json('data.top_keywords.0.id'))->toBe($popular->id)
         ->and($response->json('data.top_keywords.0.post_count'))->toBe(2);
+});
+
+it('returns daily trends within the lookback window', function () {
+    DailyStatistic::create([
+        'date' => now()->subDays(3)->toDateString(),
+        'search_count' => 5,
+        'new_posts_count' => 2,
+        'updated_posts_count' => 1,
+        'notification_count' => 1,
+    ]);
+    DailyStatistic::create([
+        'date' => now()->subDays(30)->toDateString(),
+        'search_count' => 99,
+        'new_posts_count' => 99,
+        'updated_posts_count' => 99,
+        'notification_count' => 99,
+    ]);
+
+    $response = $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/dashboard')
+        ->assertSuccessful();
+
+    $trends = collect($response->json('data.trends'));
+
+    expect($trends->pluck('new_posts_count'))->toContain(2)
+        ->and($trends->pluck('new_posts_count'))->not->toContain(99);
+});
+
+it('appends a live today entry to trends even though it has not been aggregated yet', function () {
+    Post::factory()->create(['first_seen_at' => now(), 'last_seen_at' => now()]);
+
+    $response = $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/dashboard')
+        ->assertSuccessful();
+
+    $trends = collect($response->json('data.trends'));
+    $todayEntry = $trends->firstWhere('date', now()->toDateString());
+
+    expect($todayEntry)->not->toBeNull()
+        ->and($todayEntry['new_posts_count'])->toBe(1);
+});
+
+it('does not duplicate today in trends when a backfilled row already exists for today', function () {
+    DailyStatistic::create([
+        'date' => now()->toDateString(),
+        'search_count' => 7,
+        'new_posts_count' => 7,
+        'updated_posts_count' => 7,
+        'notification_count' => 7,
+    ]);
+
+    $response = $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/dashboard')
+        ->assertSuccessful();
+
+    $trends = collect($response->json('data.trends'));
+    $todayEntries = $trends->where('date', now()->toDateString());
+
+    expect($todayEntries)->toHaveCount(1)
+        ->and($todayEntries->first()['new_posts_count'])->toBe(7);
 });
