@@ -1,0 +1,51 @@
+<?php
+
+namespace App\Providers;
+
+use App\Contracts\SearchProviderInterface;
+use App\Notifications\Channels\DiscordWebhookChannel;
+use App\Notifications\Channels\EmailChannel;
+use App\Notifications\Channels\GenericWebhookChannel;
+use App\Notifications\Channels\LineMessagingChannel;
+use App\Notifications\Channels\SlackWebhookChannel;
+use App\Notifications\Channels\TelegramBotChannel;
+use App\Providers\SearchProviders\ThreadsApiSearchProvider;
+use App\Services\NotificationService;
+use App\Support\Parsers\ThreadsPostParser;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        $this->app->bind(SearchProviderInterface::class, function ($app) {
+            return new ThreadsApiSearchProvider(
+                parser: $app->make(ThreadsPostParser::class),
+                accessToken: (string) config('threads.access_token'),
+                dailyQuota: (int) config('threads.daily_quota'),
+            );
+        });
+
+        $this->app->singleton(NotificationService::class, function ($app) {
+            return new NotificationService([
+                'email' => $app->make(EmailChannel::class),
+                'discord' => $app->make(DiscordWebhookChannel::class),
+                'slack' => $app->make(SlackWebhookChannel::class),
+                'line' => $app->make(LineMessagingChannel::class),
+                'telegram' => $app->make(TelegramBotChannel::class),
+                'webhook' => $app->make(GenericWebhookChannel::class),
+            ]);
+        });
+    }
+
+    /**
+     * Bootstrap any application services.
+     */
+    public function boot(): void
+    {
+        //
+    }
+}

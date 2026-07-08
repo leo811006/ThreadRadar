@@ -1,0 +1,112 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: threadradar-app
+    restart: unless-stopped
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - .env.docker
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - threadradar
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: threadradar-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - .:/var/www/html
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - threadradar
+
+  mysql:
+    image: mysql:8.0
+    container_name: threadradar-mysql
+    restart: unless-stopped
+    # 這些值須與 .env.docker 內的 DB_DATABASE/DB_USERNAME/DB_PASSWORD 手動保持一致
+    # （docker-compose 的變數插值讀取專案根目錄 .env，即本機開發設定，非 .env.docker，故不在此使用插值）
+    environment:
+      MYSQL_DATABASE: threadradar
+      MYSQL_USER: threadradar
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: secret
+    ports:
+      - "3306:3306"
+    volumes:
+      - threadradar-mysql-data:/var/lib/mysql
+    networks:
+      - threadradar
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: threadradar-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - threadradar-redis-data:/data
+    networks:
+      - threadradar
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  queue-worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: threadradar-queue-worker
+    restart: unless-stopped
+    command: php artisan queue:work --queue=crawl,notify --tries=3 --backoff=10 --sleep=1
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - .env.docker
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - threadradar
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: threadradar-scheduler
+    restart: unless-stopped
+    command: >
+      sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - .env.docker
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - threadradar
+
+networks:
+  threadradar:
+    driver: bridge
+
+volumes:
+  threadradar-mysql-data:
+  threadradar-redis-data:
