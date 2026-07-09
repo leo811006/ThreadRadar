@@ -22,6 +22,7 @@ class PostController extends Controller
             'date_from' => ['sometimes', 'date'],
             'date_to' => ['sometimes', 'date', 'after_or_equal:date_from'],
             'is_verified_author' => ['sometimes', 'boolean'],
+            'ai_sentiment' => ['sometimes', 'in:positive,negative,neutral'],
             'sort' => ['sometimes', 'in:latest,hottest,views,likes,replies,reposts'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
@@ -49,6 +50,10 @@ class PostController extends Controller
 
         if (array_key_exists('is_verified_author', $validated)) {
             $query->where('is_verified_author', $validated['is_verified_author']);
+        }
+
+        if (! empty($validated['ai_sentiment'])) {
+            $query->where('ai_sentiment', $validated['ai_sentiment']);
         }
 
         match ($validated['sort'] ?? 'latest') {

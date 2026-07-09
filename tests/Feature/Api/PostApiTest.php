@@ -105,6 +105,26 @@ it('filters posts by date range', function () {
         ->and($ids)->not->toContain($outOfRange->id);
 });
 
+it('filters posts by ai_sentiment', function () {
+    $positive = Post::factory()->create(['ai_summary' => 's', 'ai_sentiment' => 'positive']);
+    $negative = Post::factory()->create(['ai_summary' => 's', 'ai_sentiment' => 'negative']);
+
+    $response = $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/posts?ai_sentiment=positive')
+        ->assertSuccessful();
+
+    $ids = collect($response->json('data'))->pluck('id');
+
+    expect($ids)->toContain($positive->id)
+        ->and($ids)->not->toContain($negative->id);
+});
+
+it('rejects an invalid ai_sentiment filter value', function () {
+    $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/posts?ai_sentiment=invalid')
+        ->assertStatus(422);
+});
+
 it('shows a single post', function () {
     $post = Post::factory()->create();
 
