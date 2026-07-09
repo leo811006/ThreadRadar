@@ -102,15 +102,7 @@ class KeywordForm
                             ])
                             ->addActionLabel('新增門檻組（OR）')
                             ->defaultItems(0)
-                            ->dehydrateStateUsing(fn (array $state) => collect($state)
-                                ->map(fn (array $group) => collect($group['conditions'] ?? []))
-                                ->reject(fn ($conditions) => $conditions->isEmpty())
-                                ->values()
-                                ->flatMap(
-                                    fn ($conditions, int $groupIndex) => $conditions
-                                        ->map(fn (array $condition) => [...$condition, 'group' => $groupIndex])
-                                )
-                                ->all())
+                            ->dehydrateStateUsing(fn (array $state) => self::flattenThresholdGroups($state))
                             ->afterStateHydrated(function (Repeater $component, $state) {
                                 $thresholds = $component->getRecord()?->thresholds;
 
@@ -167,5 +159,33 @@ class KeywordForm
                             ->defaultItems(0),
                     ]),
             ]);
+    }
+
+    /**
+     * 把巢狀的「門檻組（OR）→ 組內條件（AND）」Repeater 狀態攤平成
+     * KeywordThreshold 可直接寫入的扁平陣列，並補上 group 編號。
+     *
+     * 過濾掉 metric/operator/value 任一欄位為空的條件：Repeater 的
+     * defaultItems(1) 會預先給一個空白列，使用者若新增門檻組後未實際
+     * 填寫條件就送出表單，這種殘缺資料不該被寫入資料庫（value 欄位
+     * 無預設值，直接寫入會產生 SQL 錯誤）。
+     *
+     * @param  array<int, array{conditions?: array<int, array<string, mixed>>}>  $state
+     * @return array<int, array<string, mixed>>
+     */
+    public static function flattenThresholdGroups(array $state): array
+    {
+        return collect($state)
+            ->map(fn (array $group) => collect($group['conditions'] ?? [])
+                ->filter(fn (array $condition) => filled($condition['metric'] ?? null)
+                    && filled($condition['operator'] ?? null)
+                    && filled($condition['value'] ?? null)))
+            ->reject(fn ($conditions) => $conditions->isEmpty())
+            ->values()
+            ->flatMap(
+                fn ($conditions, int $groupIndex) => $conditions
+                    ->map(fn (array $condition) => [...$condition, 'group' => $groupIndex])
+            )
+            ->all();
     }
 }
