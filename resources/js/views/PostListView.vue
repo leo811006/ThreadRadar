@@ -12,6 +12,7 @@ const filters = ref({
     date_from: '',
     date_to: '',
     is_verified_author: '',
+    is_matched: '',
     ai_sentiment: '',
     sort: 'latest',
 });
@@ -60,7 +61,7 @@ onMounted(load);
     <div class="space-y-4">
         <h1 class="text-lg font-semibold text-gray-900 dark:text-white">文章列表</h1>
 
-        <div class="rounded-lg bg-white dark:bg-gray-800 shadow p-4 grid grid-cols-2 sm:grid-cols-7 gap-3">
+        <div class="rounded-lg bg-white dark:bg-gray-800 shadow p-4 grid grid-cols-2 sm:grid-cols-8 gap-3">
             <input v-model="filters.keyword" placeholder="關鍵字" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" />
             <input v-model="filters.author" placeholder="作者" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" />
             <input v-model="filters.date_from" type="date" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm" />
@@ -69,6 +70,11 @@ onMounted(load);
                 <option value="">全部帳號</option>
                 <option value="1">已驗證</option>
                 <option value="0">未驗證</option>
+            </select>
+            <select v-model="filters.is_matched" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm">
+                <option value="">全部狀態</option>
+                <option value="1">已達標</option>
+                <option value="0">未達標</option>
             </select>
             <select v-model="filters.ai_sentiment" class="rounded border-gray-300 dark:bg-gray-700 dark:border-gray-600 dark:text-white text-sm">
                 <option value="">全部情緒</option>

@@ -91,6 +91,32 @@ it('filters posts by verified author', function () {
         ->and($ids)->not->toContain($unverified->id);
 });
 
+it('filters posts by is_matched', function () {
+    $keyword = Keyword::factory()->create();
+    $matched = Post::factory()->create();
+    $matched->keywordMatches()->create(['keyword_id' => $keyword->id, 'matched_at' => now()]);
+
+    $unmatched = Post::factory()->create();
+
+    $response = $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/posts?is_matched=1')
+        ->assertSuccessful();
+
+    $ids = collect($response->json('data'))->pluck('id');
+
+    expect($ids)->toContain($matched->id)
+        ->and($ids)->not->toContain($unmatched->id);
+
+    $response = $this->actingAs($this->user, 'sanctum')
+        ->getJson('/api/posts?is_matched=0')
+        ->assertSuccessful();
+
+    $ids = collect($response->json('data'))->pluck('id');
+
+    expect($ids)->toContain($unmatched->id)
+        ->and($ids)->not->toContain($matched->id);
+});
+
 it('filters posts by date range', function () {
     $inRange = Post::factory()->create(['posted_at' => '2026-06-15 00:00:00']);
     $outOfRange = Post::factory()->create(['posted_at' => '2026-01-01 00:00:00']);
