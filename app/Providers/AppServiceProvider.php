@@ -11,9 +11,9 @@ use App\Notifications\Channels\LineMessagingChannel;
 use App\Notifications\Channels\SlackWebhookChannel;
 use App\Notifications\Channels\TelegramBotChannel;
 use App\Providers\AiAnalysisProviders\GeminiAiAnalysisProvider;
-use App\Providers\SearchProviders\ThreadsApiSearchProvider;
+use App\Providers\SearchProviders\ThreadsScraperSearchProvider;
 use App\Services\NotificationService;
-use App\Support\Parsers\ThreadsPostParser;
+use App\Support\Parsers\ThreadsScraperPostParser;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -25,11 +25,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // 非官方 headless browser 爬蟲，暫代因 threads_keyword_search 權限尚未通過
+        // App Review 而無法使用的 ThreadsApiSearchProvider（個人非商業用途裁決，見 config/threads.php）。
         $this->app->bind(SearchProviderInterface::class, function ($app) {
-            return new ThreadsApiSearchProvider(
-                parser: $app->make(ThreadsPostParser::class),
-                accessToken: (string) config('threads.access_token'),
-                dailyQuota: (int) config('threads.daily_quota'),
+            return new ThreadsScraperSearchProvider(
+                parser: $app->make(ThreadsScraperPostParser::class),
+                nodeBinary: (string) config('threads.scraper.node_binary'),
+                scriptPath: (string) config('threads.scraper.script_path'),
+                timeoutSeconds: (int) config('threads.scraper.timeout_seconds'),
+                lockTtlSeconds: (int) config('threads.scraper.lock_ttl_seconds'),
             );
         });
 

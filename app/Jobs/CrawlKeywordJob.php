@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Contracts\SearchProviderInterface;
 use App\Data\SearchQuery;
 use App\Exceptions\QuotaExceededException;
+use App\Exceptions\ScraperBlockedException;
 use App\Models\CrawlLog;
 use App\Models\Keyword;
 use App\Services\FilterService;
@@ -63,6 +64,13 @@ class CrawlKeywordJob implements ShouldQueue
             // 交由下一輪排程等配額於 UTC 午夜重置後自然恢復。
             $this->logCrawl($keyword, 'quota_exceeded', startedAt: $startedAt, errorMessage: $e->getMessage());
             Log::warning("CrawlKeywordJob skipped for keyword #{$keyword->id}: daily quota exceeded.");
+
+            return;
+        } catch (ScraperBlockedException $e) {
+            // 疑似被封鎖/選擇器失效不是暫時性錯誤，短時間內重試大機率仍會失敗、
+            // 甚至加劇封鎖，故比照配額用盡不重試，交由下一輪排程再嘗試。
+            $this->logCrawl($keyword, 'blocked', startedAt: $startedAt, errorMessage: $e->getMessage());
+            Log::warning("CrawlKeywordJob skipped for keyword #{$keyword->id}: scraper appears blocked.");
 
             return;
         } catch (Throwable $e) {
@@ -130,7 +138,7 @@ class CrawlKeywordJob implements ShouldQueue
             'posts_found' => $postsFound,
             'posts_created' => $postsCreated,
             'posts_updated' => $postsUpdated,
-            'api_calls_used' => $status === 'quota_exceeded' ? 0 : 1,
+            'api_calls_used' => in_array($status, ['quota_exceeded', 'blocked'], true) ? 0 : 1,
             'error_message' => $errorMessage,
             'started_at' => $startedAt,
             'finished_at' => Date::now(),

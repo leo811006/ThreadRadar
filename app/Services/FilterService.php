@@ -37,6 +37,13 @@ class FilterService
     {
         $actual = $this->extractMetricValue($post, $threshold->metric);
 
+        // 資料來源無法提供此指標（如非官方爬蟲不提供互動數，見 PostData 說明）時，
+        // 一律視為不符合，而非把 null 當成 0 比較——0 會讓 '<'/'<=' 恆為真造成誤報，
+        // 讓 '>'/'>=' 恆為假則使門檻永久失效，兩者都是「假裝有資料」的錯誤呈現。
+        if ($actual === null) {
+            return false;
+        }
+
         return match ($threshold->operator) {
             '>' => $actual > $threshold->value,
             '>=' => $actual >= $threshold->value,
@@ -47,7 +54,7 @@ class FilterService
         };
     }
 
-    private function extractMetricValue(PostData $post, string $metric): int
+    private function extractMetricValue(PostData $post, string $metric): ?int
     {
         return match ($metric) {
             'views' => $post->viewsCount,
