@@ -85,6 +85,25 @@ services:
     networks:
       - threadradar
 
+  ai-analysis-worker:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: threadradar-ai-analysis-worker
+    restart: unless-stopped
+    # 獨立於 queue-worker：AI 分析呼叫 Gemini API，延遲不可控，
+    # 與 crawl/notify 共用同一個 worker 進程會讓巡檢/通知排隊等待 AI 服務回應。
+    command: php artisan queue:work --queue=ai-analysis --tries=3 --backoff=10 --sleep=1
+    volumes:
+      - .:/var/www/html
+    env_file:
+      - .env.docker
+    depends_on:
+      - mysql
+      - redis
+    networks:
+      - threadradar
+
   scheduler:
     build:
       context: .

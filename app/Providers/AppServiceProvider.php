@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\AiAnalysisProviderInterface;
 use App\Contracts\SearchProviderInterface;
 use App\Notifications\Channels\DiscordWebhookChannel;
 use App\Notifications\Channels\EmailChannel;
@@ -9,9 +10,12 @@ use App\Notifications\Channels\GenericWebhookChannel;
 use App\Notifications\Channels\LineMessagingChannel;
 use App\Notifications\Channels\SlackWebhookChannel;
 use App\Notifications\Channels\TelegramBotChannel;
+use App\Providers\AiAnalysisProviders\GeminiAiAnalysisProvider;
 use App\Providers\SearchProviders\ThreadsApiSearchProvider;
 use App\Services\NotificationService;
 use App\Support\Parsers\ThreadsPostParser;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -26,6 +30,13 @@ class AppServiceProvider extends ServiceProvider
                 parser: $app->make(ThreadsPostParser::class),
                 accessToken: (string) config('threads.access_token'),
                 dailyQuota: (int) config('threads.daily_quota'),
+            );
+        });
+
+        $this->app->bind(AiAnalysisProviderInterface::class, function ($app) {
+            return new GeminiAiAnalysisProvider(
+                apiKey: (string) config('gemini.api_key'),
+                model: (string) config('gemini.model'),
             );
         });
 
@@ -46,6 +57,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Gemini 免費層級限制每分鐘 15 次請求（RPM），超過會收到 429。
+        // 以 job 層級的 rate limiter 主動節流，避免 AnalyzePostJob 在短時間內
+        // 大量 dispatch 時（例如一次巡檢命中多篇達標文章）直接把額度打爆。
+        RateLimiter::for('gemini-ai-analysis', function () {
+            return Limit::perMinute(15);
+        });
     }
 }

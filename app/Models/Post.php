@@ -34,6 +34,8 @@ class Post extends Model
         'ai_summary',
         'ai_tags',
         'ai_sentiment',
+        'ai_analysis_failed_at',
+        'ai_analysis_failure_reason',
         'first_seen_at',
         'last_seen_at',
     ];
@@ -51,6 +53,7 @@ class Post extends Model
             'quotes_count' => 'integer',
             'is_verified_author' => 'boolean',
             'ai_tags' => 'array',
+            'ai_analysis_failed_at' => 'datetime',
             'first_seen_at' => 'datetime',
             'last_seen_at' => 'datetime',
         ];

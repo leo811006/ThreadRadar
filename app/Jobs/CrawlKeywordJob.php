@@ -88,6 +88,10 @@ class CrawlKeywordJob implements ShouldQueue
                 if ($match->wasRecentlyCreated || $match->notified_at === null) {
                     SendNotificationJob::dispatch($post->id, $match->id)->onQueue('notify');
                 }
+
+                if ($match->wasRecentlyCreated && $post->ai_summary === null && $post->ai_analysis_failed_at === null) {
+                    AnalyzePostJob::dispatch($post->id)->onQueue('ai-analysis');
+                }
             }
         }
 

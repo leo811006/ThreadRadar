@@ -8,7 +8,8 @@
 | `nginx` | Reverse proxy，對外開放 `localhost:8000` |
 | `mysql` | MySQL 8，資料持久層 |
 | `redis` | Cache + Queue driver |
-| `queue-worker` | 執行 `CrawlKeywordJob`/`SendNotificationJob`，可水平擴展（`docker compose up --scale queue-worker=3`） |
+| `queue-worker` | 執行 `CrawlKeywordJob`/`SendNotificationJob`（`crawl`/`notify` queue），可水平擴展（`docker compose up --scale queue-worker=3`） |
+| `ai-analysis-worker` | 獨立執行 `AnalyzePostJob`（`ai-analysis` queue）：Gemini API 延遲不可控，與 `queue-worker` 分離避免拖慢巡檢/通知 |
 | `scheduler` | 每分鐘觸發 `schedule:run`，僅負責判斷到期關鍵字並 dispatch，不做實際巡檢 |
 
 ## 兩份環境變數檔案
@@ -36,4 +37,6 @@ REST API：`http://localhost:8000/api/...`
 
 ```bash
 docker compose up -d --scale queue-worker=3
+# ai-analysis-worker 亦可視 Gemini 呼叫量獨立擴展：
+docker compose up -d --scale ai-analysis-worker=2
 ```

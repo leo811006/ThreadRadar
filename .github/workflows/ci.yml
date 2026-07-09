@@ -1,10 +1,13 @@
+# 目前沒有上伺服器的需求，暫時停用自動觸發，只留 workflow_dispatch（手動觸發）。
+# 需要恢復自動 CI 時，取消下面 push/pull_request 的註解即可。
 name: CI
 
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+  workflow_dispatch: {}
+  # push:
+  #   branches: [main, master]
+  # pull_request:
+  #   branches: [main, master]
 
 jobs:
   test:
