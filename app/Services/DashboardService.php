@@ -155,4 +155,25 @@ class DashboardService
 
         return $history->push($today);
     }
+
+    /**
+     * AI 分析失敗率統計（FR-8）：分母為「曾嘗試分析」的文章數（已成功或已永久失敗），
+     * 尚未被 AnalyzePostJob 處理過的文章（兩欄位皆為 null）不計入，避免稀釋失敗率。
+     *
+     * @return object{attempted: int, failed: int, failure_rate: float}
+     */
+    public function aiAnalysisFailureStats(): object
+    {
+        return Cache::remember('dashboard:ai_analysis_failure_stats', self::CACHE_TTL_SECONDS, function () {
+            $failed = Post::whereNotNull('ai_analysis_failed_at')->count();
+            $succeeded = Post::whereNotNull('ai_summary')->count();
+            $attempted = $failed + $succeeded;
+
+            return (object) [
+                'attempted' => $attempted,
+                'failed' => $failed,
+                'failure_rate' => $attempted > 0 ? round($failed / $attempted * 100, 1) : 0.0,
+            ];
+        });
+    }
 }

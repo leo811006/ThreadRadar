@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Widgets\AiAnalysisStatsWidget;
 use App\Filament\Widgets\TodayStatsOverview;
 use App\Filament\Widgets\TopAuthorsWidget;
 use App\Filament\Widgets\TopKeywordsWidget;
@@ -47,6 +48,7 @@ class AdminPanelProvider extends PanelProvider
                 TopAuthorsWidget::class,
                 TopKeywordsWidget::class,
                 TrendChartWidget::class,
+                AiAnalysisStatsWidget::class,
             ])
             ->middleware([
                 EncryptCookies::class,

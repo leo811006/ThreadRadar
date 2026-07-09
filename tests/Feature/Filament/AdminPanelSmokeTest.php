@@ -83,3 +83,31 @@ it('does not render an edit button on the post view page', function () {
     Livewire::test(ViewPost::class, ['record' => $post->getRouteKey()])
         ->assertActionDoesNotExist('edit');
 });
+
+it('filters posts by ai_sentiment', function () {
+    actingAsAdmin();
+
+    $positive = Post::factory()->create(['ai_summary' => 's', 'ai_sentiment' => 'positive']);
+    $negative = Post::factory()->create(['ai_summary' => 's', 'ai_sentiment' => 'negative']);
+
+    Livewire::test(ListPosts::class)
+        ->filterTable('ai_sentiment', 'positive')
+        ->assertCanSeeTableRecords([$positive])
+        ->assertCanNotSeeTableRecords([$negative]);
+});
+
+it('filters posts by AI analysis failure status', function () {
+    actingAsAdmin();
+
+    $failed = Post::factory()->create([
+        'ai_summary' => null,
+        'ai_analysis_failed_at' => now(),
+        'ai_analysis_failure_reason' => 'blocked',
+    ]);
+    $succeeded = Post::factory()->create(['ai_summary' => 's', 'ai_analysis_failed_at' => null]);
+
+    Livewire::test(ListPosts::class)
+        ->filterTable('ai_analysis_failed_at', true)
+        ->assertCanSeeTableRecords([$failed])
+        ->assertCanNotSeeTableRecords([$succeeded]);
+});

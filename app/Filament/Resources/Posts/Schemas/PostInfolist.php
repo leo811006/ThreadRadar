@@ -39,6 +39,18 @@ class PostInfolist
                         TextEntry::make('first_seen_at')->label('首次發現時間')->dateTime(),
                         TextEntry::make('last_seen_at')->label('最後更新時間')->dateTime(),
                     ]),
+                Section::make('AI 分析')
+                    ->columns(1)
+                    ->components([
+                        TextEntry::make('ai_summary')->label('摘要')->placeholder('尚未分析')->columnSpanFull(),
+                        TextEntry::make('ai_sentiment')->label('情緒')->badge()->placeholder('尚未分析'),
+                        TextEntry::make('ai_tags')->label('標籤')->badge()->placeholder('尚未分析'),
+                        TextEntry::make('ai_analysis_failure_reason')
+                            ->label('分析失敗原因')
+                            ->color('danger')
+                            ->columnSpanFull()
+                            ->visible(fn ($record) => $record->ai_analysis_failed_at !== null),
+                    ]),
             ]);
     }
 }
