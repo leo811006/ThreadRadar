@@ -66,7 +66,7 @@ it('creates posts and dispatches notification job when threshold is met', functi
     Queue::assertPushed(SendNotificationJob::class);
 });
 
-it('dispatches AI analysis job only on first match, not on repeated crawls', function () {
+it('dispatches a single batched AI analysis job containing all matched posts on first match', function () {
     Queue::fake([SendNotificationJob::class, AnalyzePostJob::class]);
 
     $keyword = Keyword::factory()->create(['name' => 'iPhone']);
@@ -85,7 +85,9 @@ it('dispatches AI analysis job only on first match, not on repeated crawls', fun
         app(App\Services\FilterService::class),
     );
 
-    Queue::assertPushed(AnalyzePostJob::class, 1);
+    $post = Post::where('threads_url', $url)->firstOrFail();
+
+    Queue::assertPushed(AnalyzePostJob::class, fn (AnalyzePostJob $job) => $job->postIds === [$post->id]);
 
     Queue::fake([SendNotificationJob::class, AnalyzePostJob::class]);
 
@@ -101,6 +103,33 @@ it('dispatches AI analysis job only on first match, not on repeated crawls', fun
     );
 
     Queue::assertNotPushed(AnalyzePostJob::class);
+});
+
+it('splits AI analysis into multiple batches when matched posts exceed the batch size', function () {
+    Queue::fake([SendNotificationJob::class, AnalyzePostJob::class]);
+
+    $keyword = Keyword::factory()->create(['name' => 'iPhone']);
+    $keyword->thresholds()->create(['metric' => 'views', 'operator' => '>=', 'value' => 1000]);
+
+    // 批次上限為 20 篇（config('gemini.analysis_batch_size') 預設值），22 篇
+    // 達標文章應被切成兩批：一批 20 篇、一批 2 篇。
+    bindFakeProvider(
+        array_map(
+            fn (int $i) => makeFakePost(['threadsUrl' => "https://www.threads.net/@a/post/batch-{$i}", 'viewsCount' => 5000]),
+            range(1, 22),
+        )
+    );
+
+    (new CrawlKeywordJob($keyword->id))->handle(
+        app(SearchProviderInterface::class),
+        app(App\Support\KeywordTimeRangeResolver::class),
+        app(App\Services\PostUpsertService::class),
+        app(App\Services\FilterService::class),
+    );
+
+    Queue::assertPushed(AnalyzePostJob::class, 2);
+    Queue::assertPushed(AnalyzePostJob::class, fn (AnalyzePostJob $job) => count($job->postIds) === 20);
+    Queue::assertPushed(AnalyzePostJob::class, fn (AnalyzePostJob $job) => count($job->postIds) === 2);
 });
 
 it('does not dispatch AI analysis job for a post that already permanently failed analysis before', function () {
@@ -128,7 +157,7 @@ it('does not dispatch AI analysis job for a post that already permanently failed
     );
 
     // 即使命中新的關鍵字（PostKeywordMatch 是新建的），曾永久失敗過的文章
-    // 不該無止盡地重新呼叫 AI 服務。
+    // 不該無止盡地重新呼叫 AI 服務，也不該被包進批次裡。
     Queue::assertNotPushed(AnalyzePostJob::class);
 });
 

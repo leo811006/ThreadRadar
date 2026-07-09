@@ -73,6 +73,7 @@ class CrawlKeywordJob implements ShouldQueue
 
         $postsCreated = 0;
         $postsUpdated = 0;
+        $postIdsForAiAnalysis = [];
 
         foreach ($results as $postData) {
             $post = $postUpsertService->upsert($postData);
@@ -90,9 +91,18 @@ class CrawlKeywordJob implements ShouldQueue
                 }
 
                 if ($match->wasRecentlyCreated && $post->ai_summary === null && $post->ai_analysis_failed_at === null) {
-                    AnalyzePostJob::dispatch($post->id)->onQueue('ai-analysis');
+                    $postIdsForAiAnalysis[] = $post->id;
                 }
             }
+        }
+
+        // 本次巡檢達標的文章一次打包成批次交給 AnalyzePostJob，而非逐篇個別
+        // dispatch，藉此以單次（或少數幾次）Gemini API 呼叫取代 N 次呼叫。
+        // 批次大小是 AI provider 的調校參數（見 config/gemini.php 說明），非巡檢邏輯本身。
+        $batchSize = (int) config('gemini.analysis_batch_size');
+
+        foreach (array_chunk($postIdsForAiAnalysis, $batchSize) as $batch) {
+            AnalyzePostJob::dispatch($batch)->onQueue('ai-analysis');
         }
 
         $this->logCrawl(
