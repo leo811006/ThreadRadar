@@ -11,6 +11,7 @@ use App\Models\Post;
 use App\Models\PostKeywordMatch;
 use App\Providers\SearchProviders\FakeSearchProvider;
 use Carbon\CarbonImmutable;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\Queue;
 
 function makeFakePost(array $overrides = []): PostData
@@ -42,6 +43,15 @@ function bindFakeProvider(array $results, ?int $quota = 2200): FakeSearchProvide
 
     return $fake;
 }
+
+it('applies RateLimited(threads-api) middleware', function () {
+    $keyword = Keyword::factory()->create();
+
+    $middleware = (new CrawlKeywordJob($keyword->id))->middleware();
+
+    expect($middleware)->toHaveCount(1)
+        ->and($middleware[0])->toBeInstanceOf(RateLimited::class);
+});
 
 it('creates posts and dispatches notification job when threshold is met', function () {
     Queue::fake([SendNotificationJob::class, AnalyzePostJob::class]);
