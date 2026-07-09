@@ -13,7 +13,6 @@ use App\Support\KeywordTimeRangeResolver;
 use Carbon\CarbonInterface;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -35,18 +34,6 @@ class CrawlKeywordJob implements ShouldQueue
         public readonly int $keywordId,
     ) {
         $this->onQueue('crawl');
-    }
-
-    /**
-     * Threads API 免費層級每分鐘最多 15 次請求，超過限制的 job 會自動 release
-     * 回佇列延後執行，而非直接打 API 換來 429。release 發生在 handle() 執行前，
-     * 因此 last_crawled_at 不會被提前更新，下一輪排程仍會正確判定為到期。
-     *
-     * @return array<int, RateLimited>
-     */
-    public function middleware(): array
-    {
-        return [new RateLimited('threads-api')];
     }
 
     public function handle(

@@ -63,12 +63,5 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('gemini-ai-analysis', function () {
             return Limit::perMinute(15);
         });
-
-        // Threads API 同樣限制每分鐘 15 次請求：多組關鍵字若排程時間重疊
-        // （例如同一批次建立、間隔設定相同），DispatchDueCrawlsCommand
-        // 可能在同一分鐘內一次 dispatch 大量 CrawlKeywordJob，需主動節流。
-        RateLimiter::for('threads-api', function () {
-            return Limit::perMinute(15);
-        });
     }
 }
