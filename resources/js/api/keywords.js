@@ -23,3 +23,8 @@ export async function updateKeyword(id, payload) {
 export async function deleteKeyword(id) {
     await client.delete(`/api/keywords/${id}`);
 }
+
+export async function crawlKeywordNow(id) {
+    const response = await client.post(`/api/keywords/${id}/crawl-now`);
+    return response.data;
+}

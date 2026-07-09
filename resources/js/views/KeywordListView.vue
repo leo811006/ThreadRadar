@@ -1,9 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue';
-import { listKeywords, deleteKeyword } from '../api/keywords';
+import { listKeywords, deleteKeyword, crawlKeywordNow } from '../api/keywords';
 
 const loading = ref(true);
 const keywords = ref([]);
+const crawlingIds = ref(new Set());
+const crawlMessage = ref('');
 
 async function load() {
     loading.value = true;
@@ -21,6 +23,18 @@ async function handleDelete(id) {
     await load();
 }
 
+async function handleCrawlNow(id) {
+    crawlingIds.value.add(id);
+    crawlMessage.value = '';
+
+    try {
+        const result = await crawlKeywordNow(id);
+        crawlMessage.value = result.message;
+    } finally {
+        crawlingIds.value.delete(id);
+    }
+}
+
 onMounted(load);
 </script>
 
@@ -34,6 +48,10 @@ onMounted(load);
             >
                 新增關鍵字
             </RouterLink>
+        </div>
+
+        <div v-if="crawlMessage" class="rounded bg-indigo-50 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-200 text-sm px-4 py-2">
+            {{ crawlMessage }}
         </div>
 
         <div v-if="loading" class="text-gray-500">載入中...</div>
@@ -63,6 +81,14 @@ onMounted(load);
                         <td class="px-4 py-2 text-gray-600 dark:text-gray-300">{{ keyword.time_range_type }}</td>
                         <td class="px-4 py-2 text-gray-600 dark:text-gray-300">{{ keyword.thresholds.length }}</td>
                         <td class="px-4 py-2 text-right space-x-2">
+                            <button
+                                class="text-indigo-600 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+                                :disabled="crawlingIds.has(keyword.id)"
+                                title="不受巡檢頻率限制，立即加入巡檢佇列（需 queue worker 執行中才會實際跑）"
+                                @click="handleCrawlNow(keyword.id)"
+                            >
+                                {{ crawlingIds.has(keyword.id) ? '處理中...' : '立即巡檢' }}
+                            </button>
                             <RouterLink
                                 :to="{ name: 'keywords.edit', params: { id: keyword.id } }"
                                 class="text-indigo-600 hover:underline"

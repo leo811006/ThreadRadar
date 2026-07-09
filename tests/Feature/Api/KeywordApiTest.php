@@ -1,7 +1,9 @@
 <?php
 
+use App\Jobs\CrawlKeywordJob;
 use App\Models\Keyword;
 use App\Models\User;
+use Illuminate\Support\Facades\Queue;
 
 beforeEach(function () {
     $this->user = User::factory()->create();
@@ -157,4 +159,27 @@ it('overwrites notification channel config when a new non-empty config is provid
 
     $updated = $keyword->notificationChannels()->first();
     expect($updated->config)->toBe(['webhook_url' => 'https://discord.example/new-webhook']);
+});
+
+it('dispatches a crawl job immediately when crawl-now is called, ignoring the schedule', function () {
+    Queue::fake([CrawlKeywordJob::class]);
+
+    // 最近才巡檢過、遠未到下次間隔，一般排程不會 dispatch，但手動觸發應忽略排程限制。
+    $keyword = Keyword::factory()->create([
+        'crawl_interval_min' => 60,
+        'last_crawled_at' => now()->subMinutes(1),
+    ]);
+
+    $this->actingAs($this->user, 'sanctum')
+        ->postJson("/api/keywords/{$keyword->id}/crawl-now")
+        ->assertStatus(202)
+        ->assertJsonPath('message', '已加入巡檢佇列，請稍後重新整理查看結果。');
+
+    Queue::assertPushed(CrawlKeywordJob::class, fn ($job) => $job->keywordId === $keyword->id);
+});
+
+it('rejects unauthenticated crawl-now requests', function () {
+    $keyword = Keyword::factory()->create();
+
+    $this->postJson("/api/keywords/{$keyword->id}/crawl-now")->assertUnauthorized();
 });
