@@ -102,7 +102,6 @@ class KeywordForm
                             ])
                             ->addActionLabel('新增門檻組（OR）')
                             ->defaultItems(0)
-                            ->dehydrateStateUsing(fn (array $state) => self::flattenThresholdGroups($state))
                             ->afterStateHydrated(function (Repeater $component, $state) {
                                 $thresholds = $component->getRecord()?->thresholds;
 
