@@ -16,6 +16,8 @@ const filters = ref({
     sort: 'latest',
 });
 
+const page = ref(1);
+
 function sentimentLabel(sentiment) {
     return { positive: '正面', negative: '負面', neutral: '中立' }[sentiment] ?? '';
 }
@@ -24,7 +26,7 @@ async function load() {
     loading.value = true;
 
     const params = Object.fromEntries(
-        Object.entries(filters.value).filter(([, value]) => value !== '')
+        Object.entries({ ...filters.value, page: page.value }).filter(([, value]) => value !== '')
     );
 
     const response = await listPosts(params);
@@ -33,10 +35,22 @@ async function load() {
     loading.value = false;
 }
 
+function goToPage(target) {
+    if (loading.value || !meta.value || target < 1 || target > meta.value.last_page || target === page.value) {
+        return;
+    }
+
+    page.value = target;
+    load();
+}
+
 let debounceTimer = null;
 watch(filters, () => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(load, 300);
+    debounceTimer = setTimeout(() => {
+        page.value = 1;
+        load();
+    }, 300);
 }, { deep: true });
 
 onMounted(load);
@@ -123,8 +137,24 @@ onMounted(load);
                 </tbody>
             </table>
 
-            <div v-if="meta" class="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-100 dark:border-gray-700">
-                共 {{ meta.total }} 筆，第 {{ meta.current_page }} / {{ meta.last_page }} 頁
+            <div v-if="meta" class="px-4 py-2 flex items-center justify-between border-t border-gray-100 dark:border-gray-700">
+                <span class="text-xs text-gray-500 dark:text-gray-400">
+                    共 {{ meta.total }} 筆，第 {{ meta.current_page }} / {{ meta.last_page }} 頁
+                </span>
+                <div class="flex items-center gap-2">
+                    <button
+                        type="button"
+                        class="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                        :disabled="loading || page <= 1"
+                        @click="goToPage(page - 1)"
+                    >上一頁</button>
+                    <button
+                        type="button"
+                        class="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed"
+                        :disabled="loading || page >= meta.last_page"
+                        @click="goToPage(page + 1)"
+                    >下一頁</button>
+                </div>
             </div>
         </div>
     </div>
