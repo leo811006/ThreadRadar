@@ -15,20 +15,24 @@ use Illuminate\Support\Facades\Queue;
 
 function makeFakePost(array $overrides = []): PostData
 {
+    // array_key_exists（非 ??）才能讓呼叫端明確傳入 null 覆蓋預設值——
+    // ?? 無法區分「沒傳這個 key」與「明確傳了 null」，會誤將 null 覆蓋為預設值。
+    $value = fn (string $key, mixed $default) => array_key_exists($key, $overrides) ? $overrides[$key] : $default;
+
     return new PostData(
-        threadsUrl: $overrides['threadsUrl'] ?? 'https://www.threads.net/@user/post/' . uniqid(),
-        authorName: $overrides['authorName'] ?? 'Fake Author',
-        authorUsername: $overrides['authorUsername'] ?? 'fakeauthor',
+        threadsUrl: $value('threadsUrl', 'https://www.threads.net/@user/post/' . uniqid()),
+        authorName: $value('authorName', 'Fake Author'),
+        authorUsername: $value('authorUsername', 'fakeauthor'),
         postedAt: CarbonImmutable::now(),
-        content: $overrides['content'] ?? 'Fake content',
+        content: $value('content', 'Fake content'),
         images: [],
         videos: [],
-        viewsCount: $overrides['viewsCount'] ?? 0,
-        likesCount: $overrides['likesCount'] ?? 0,
-        repliesCount: $overrides['repliesCount'] ?? 0,
-        repostsCount: $overrides['repostsCount'] ?? 0,
-        quotesCount: $overrides['quotesCount'] ?? 0,
-        isVerifiedAuthor: $overrides['isVerifiedAuthor'] ?? false,
+        viewsCount: $value('viewsCount', 0),
+        likesCount: $value('likesCount', 0),
+        repliesCount: $value('repliesCount', 0),
+        repostsCount: $value('repostsCount', 0),
+        quotesCount: $value('quotesCount', 0),
+        isVerifiedAuthor: $value('isVerifiedAuthor', false),
     );
 }
 
@@ -266,6 +270,39 @@ it('does not retry the job when quota is exceeded (returns instead of throwing)'
     );
 
     expect($keyword->fresh()->last_crawled_at)->not->toBeNull();
+});
+
+it('skips a single post with inconsistent engagement metrics without aborting the rest of the batch', function () {
+    Queue::fake([SendNotificationJob::class, AnalyzePostJob::class]);
+
+    $keyword = Keyword::factory()->create(['name' => 'iPhone']);
+    $keyword->thresholds()->create(['metric' => 'views', 'operator' => '>=', 'value' => 1000]);
+
+    bindFakeProvider([
+        // 這篇的 likes/replies/reposts 只有部分為 null（爬蟲 DOM 擷取異常時的真實情境），
+        // PostUpsertService::upsert() 會對它拋出 LogicException。
+        makeFakePost([
+            'threadsUrl' => 'https://www.threads.net/@a/post/bad-metrics',
+            'likesCount' => 10,
+            'repliesCount' => null,
+            'repostsCount' => 2,
+        ]),
+        makeFakePost(['threadsUrl' => 'https://www.threads.net/@a/post/good', 'viewsCount' => 5000]),
+    ]);
+
+    (new CrawlKeywordJob($keyword->id))->handle(
+        app(SearchProviderInterface::class),
+        app(App\Support\KeywordTimeRangeResolver::class),
+        app(App\Services\PostUpsertService::class),
+        app(App\Services\FilterService::class),
+    );
+
+    // 壞資料那篇被跳過、未寫入；正常那篇仍應被處理並比對門檻。
+    expect(Post::count())->toBe(1)
+        ->and(Post::first()->threads_url)->toBe('https://www.threads.net/@a/post/good')
+        ->and(PostKeywordMatch::count())->toBe(1);
+
+    Queue::assertPushed(SendNotificationJob::class);
 });
 
 it('records a crawl log on successful crawl', function () {

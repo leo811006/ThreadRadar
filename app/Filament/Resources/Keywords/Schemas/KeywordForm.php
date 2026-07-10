@@ -60,7 +60,7 @@ class KeywordForm
                     ]),
 
                 Section::make('熱門度門檻')
-                    ->description('組間為 OR、組內為 AND：任一組內的條件全數符合即算命中（例如「likes>=500」一組，「likes>=300 且 replies>=10」另一組）')
+                    ->description('組間為 OR、組內為 AND：任一組內的條件全數符合即算命中（例如「likes>=500」一組，「likes>=300 且 replies>=10」另一組）。目前資料來源為非官方爬蟲，不提供 Views/Quotes 數據，設定這兩項門檻會永久無法命中')
                     ->components([
                         Repeater::make('thresholds')
                             ->label('門檻組')

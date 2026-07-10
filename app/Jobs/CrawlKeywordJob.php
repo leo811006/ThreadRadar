@@ -16,6 +16,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\Log;
+use LogicException;
 use Throwable;
 
 /**
@@ -84,7 +85,21 @@ class CrawlKeywordJob implements ShouldQueue
         $postIdsForAiAnalysis = [];
 
         foreach ($results as $postData) {
-            $post = $postUpsertService->upsert($postData);
+            try {
+                $post = $postUpsertService->upsert($postData);
+            } catch (LogicException $e) {
+                // 單篇貼文的互動數欄位不一致（如爬蟲 DOM 擷取邏輯出錯導致部分缺值）
+                // 是資料品質問題而非暫時性錯誤，重試整個 job 只會用同樣的來源資料
+                // 重現同一個例外——略過這一篇、記錄下來，讓其餘篇正常寫入與比對，
+                // 而非讓一篇壞資料拖垮整批（見 2026-07-10 事故：改動前曾因未捕捉
+                // 此例外，讓單篇失敗中斷同一批次剩餘貼文的處理）。
+                Log::warning("CrawlKeywordJob: 略過一篇互動數欄位不一致的貼文（關鍵字 #{$keyword->id}）", [
+                    'threads_url' => $postData->threadsUrl,
+                    'error' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
 
             $post->wasRecentlyCreated ? $postsCreated++ : $postsUpdated++;
 

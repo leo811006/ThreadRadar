@@ -8,20 +8,24 @@ use Illuminate\Support\Facades\Date;
 
 function makeUpsertPostData(array $overrides = []): PostData
 {
+    // array_key_exists（非 ??）才能讓呼叫端明確傳入 null 覆蓋預設值——
+    // ?? 無法區分「沒傳這個 key」與「明確傳了 null」，會誤將 null 覆蓋為預設值。
+    $value = fn (string $key, mixed $default) => array_key_exists($key, $overrides) ? $overrides[$key] : $default;
+
     return new PostData(
-        threadsUrl: $overrides['threadsUrl'] ?? 'https://www.threads.net/@user/post/abc',
-        authorName: $overrides['authorName'] ?? 'Original Author',
-        authorUsername: $overrides['authorUsername'] ?? 'originalauthor',
+        threadsUrl: $value('threadsUrl', 'https://www.threads.net/@user/post/abc'),
+        authorName: $value('authorName', 'Original Author'),
+        authorUsername: $value('authorUsername', 'originalauthor'),
         postedAt: CarbonImmutable::parse('2026-01-01 00:00:00'),
-        content: $overrides['content'] ?? 'Original content',
+        content: $value('content', 'Original content'),
         images: [],
         videos: [],
-        viewsCount: $overrides['viewsCount'] ?? 100,
-        likesCount: $overrides['likesCount'] ?? 10,
-        repliesCount: $overrides['repliesCount'] ?? 5,
-        repostsCount: $overrides['repostsCount'] ?? 2,
-        quotesCount: $overrides['quotesCount'] ?? 1,
-        isVerifiedAuthor: $overrides['isVerifiedAuthor'] ?? false,
+        viewsCount: $value('viewsCount', 100),
+        likesCount: $value('likesCount', 10),
+        repliesCount: $value('repliesCount', 5),
+        repostsCount: $value('repostsCount', 2),
+        quotesCount: $value('quotesCount', 1),
+        isVerifiedAuthor: $value('isVerifiedAuthor', false),
     );
 }
 
@@ -93,6 +97,128 @@ it('records a metric snapshot on every upsert', function () {
 
     $post = $this->service->upsert(makeUpsertPostData(['threadsUrl' => $url, 'viewsCount' => 100]));
     $this->service->upsert(makeUpsertPostData(['threadsUrl' => $url, 'viewsCount' => 200]));
+
+    expect($post->metricSnapshots()->count())->toBe(2);
+});
+
+it('accepts views/quotes null while likes/replies/reposts have values, as from the scraper source', function () {
+    $data = makeUpsertPostData([
+        'viewsCount' => null,
+        'quotesCount' => null,
+        'likesCount' => 894,
+        'repliesCount' => 42,
+        'repostsCount' => 2,
+    ]);
+
+    $post = $this->service->upsert($data);
+
+    expect($post->views_count)->toBe(0)
+        ->and($post->quotes_count)->toBe(0)
+        ->and($post->likes_count)->toBe(894)
+        ->and($post->replies_count)->toBe(42)
+        ->and($post->reposts_count)->toBe(2);
+});
+
+it('accepts likes/replies/reposts null while views/quotes have values', function () {
+    $data = makeUpsertPostData([
+        'viewsCount' => 500,
+        'quotesCount' => 3,
+        'likesCount' => null,
+        'repliesCount' => null,
+        'repostsCount' => null,
+    ]);
+
+    $post = $this->service->upsert($data);
+
+    expect($post->views_count)->toBe(500)
+        ->and($post->quotes_count)->toBe(3)
+        ->and($post->likes_count)->toBe(0)
+        ->and($post->replies_count)->toBe(0)
+        ->and($post->reposts_count)->toBe(0);
+});
+
+it('throws when only some of views/quotes are null', function () {
+    $data = makeUpsertPostData(['viewsCount' => 100, 'quotesCount' => null]);
+
+    $this->service->upsert($data);
+})->throws(LogicException::class, 'views/quotes');
+
+it('throws when only some of likes/replies/reposts are null', function () {
+    $data = makeUpsertPostData(['likesCount' => 10, 'repliesCount' => null, 'repostsCount' => 2]);
+
+    $this->service->upsert($data);
+})->throws(LogicException::class, 'likes/replies/reposts');
+
+it('does not zero-fill an existing post real views/quotes when a later scraper update has them null', function () {
+    $url = 'https://www.threads.net/@user/post/no-zero-fill-test';
+
+    $this->service->upsert(makeUpsertPostData([
+        'threadsUrl' => $url,
+        'viewsCount' => 50000,
+        'quotesCount' => 8,
+        'likesCount' => 100,
+        'repliesCount' => 10,
+        'repostsCount' => 5,
+    ]));
+
+    $updated = $this->service->upsert(makeUpsertPostData([
+        'threadsUrl' => $url,
+        'viewsCount' => null,
+        'quotesCount' => null,
+        'likesCount' => 894,
+        'repliesCount' => 42,
+        'repostsCount' => 2,
+    ]));
+
+    // posts 表：views/quotes 這次沒有新觀測，維持既有真實值不被覆蓋。
+    expect($updated->views_count)->toBe(50000)
+        ->and($updated->quotes_count)->toBe(8)
+        ->and($updated->likes_count)->toBe(894);
+
+    // post_metric_snapshots：缺值那組沿用最後已知真實值，不可寫成 0
+    // （0 會與 posts 表的 50000 互相矛盾，偽造出一筆歸零的假快照）。
+    $latestSnapshot = $updated->metricSnapshots()->latest('recorded_at')->first();
+    expect($latestSnapshot->views_count)->toBe(50000)
+        ->and($latestSnapshot->quotes_count)->toBe(8)
+        ->and($latestSnapshot->likes_count)->toBe(894);
+});
+
+it('does not create a duplicate snapshot when metric values are unchanged from the last one', function () {
+    $url = 'https://www.threads.net/@user/post/dedup-snapshot-test';
+
+    $post = $this->service->upsert(makeUpsertPostData([
+        'threadsUrl' => $url,
+        'likesCount' => 100,
+        'repliesCount' => 10,
+        'repostsCount' => 5,
+    ]));
+
+    $this->service->upsert(makeUpsertPostData([
+        'threadsUrl' => $url,
+        'likesCount' => 100,
+        'repliesCount' => 10,
+        'repostsCount' => 5,
+    ]));
+
+    expect($post->metricSnapshots()->count())->toBe(1);
+});
+
+it('creates a new snapshot when metric values differ from the last one', function () {
+    $url = 'https://www.threads.net/@user/post/change-snapshot-test';
+
+    $post = $this->service->upsert(makeUpsertPostData([
+        'threadsUrl' => $url,
+        'likesCount' => 100,
+        'repliesCount' => 10,
+        'repostsCount' => 5,
+    ]));
+
+    $this->service->upsert(makeUpsertPostData([
+        'threadsUrl' => $url,
+        'likesCount' => 150,
+        'repliesCount' => 10,
+        'repostsCount' => 5,
+    ]));
 
     expect($post->metricSnapshots()->count())->toBe(2);
 });
