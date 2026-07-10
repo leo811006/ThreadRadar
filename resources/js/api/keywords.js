@@ -1,7 +1,7 @@
 import client from './client';
 
-export async function listKeywords(page = 1) {
-    const response = await client.get('/api/keywords', { params: { page } });
+export async function listKeywords(page = 1, params = {}) {
+    const response = await client.get('/api/keywords', { params: { page, ...params } });
     return response.data;
 }
 

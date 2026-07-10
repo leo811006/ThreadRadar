@@ -28,7 +28,7 @@ class PostController extends Controller
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
-        $query = Post::query()->with('keywords');
+        $query = Post::query()->with(['keywords', 'crawledKeywords']);
 
         if (! empty($validated['keyword'])) {
             $query->whereHas('keywords', fn ($q) => $q->where('name', $validated['keyword']));
@@ -77,6 +77,6 @@ class PostController extends Controller
 
     public function show(Post $post): PostResource
     {
-        return new PostResource($post->load('keywords'));
+        return new PostResource($post->load(['keywords', 'crawledKeywords']));
     }
 }

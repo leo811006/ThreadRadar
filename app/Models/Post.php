@@ -70,6 +70,14 @@ class Post extends Model
             ->withPivot(['matched_at', 'notified_at']);
     }
 
+    /**
+     * 曾巡檢到此文章的關鍵字，無論是否達標（見 post_keyword_crawls migration 說明）。
+     */
+    public function crawledKeywords(): BelongsToMany
+    {
+        return $this->belongsToMany(Keyword::class, 'post_keyword_crawls');
+    }
+
     public function metricSnapshots(): HasMany
     {
         return $this->hasMany(PostMetricSnapshot::class);

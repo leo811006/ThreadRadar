@@ -28,6 +28,7 @@ class PostResource extends JsonResource
             'quotes_count' => $this->quotes_count,
             'is_verified_author' => $this->is_verified_author,
             'keywords' => $this->whenLoaded('keywords', fn () => $this->keywords->pluck('name')),
+            'crawled_keywords' => $this->whenLoaded('crawledKeywords', fn () => $this->crawledKeywords->pluck('name')),
             'ai_summary' => $this->ai_summary,
             'ai_sentiment' => $this->ai_sentiment,
             'ai_tags' => $this->ai_tags,

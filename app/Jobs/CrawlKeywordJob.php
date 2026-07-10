@@ -103,6 +103,10 @@ class CrawlKeywordJob implements ShouldQueue
 
             $post->wasRecentlyCreated ? $postsCreated++ : $postsUpdated++;
 
+            // 無論是否達標都記錄「曾被此關鍵字巡檢到」，讓未達標文章在列表也能
+            // 顯示其所屬關鍵字（見 post_keyword_crawls migration 說明）。
+            $post->crawledKeywords()->syncWithoutDetaching([$keyword->id]);
+
             if ($filterService->matchesThreshold($postData, $keyword)) {
                 $match = $post->keywordMatches()->firstOrCreate(
                     ['keyword_id' => $keyword->id],

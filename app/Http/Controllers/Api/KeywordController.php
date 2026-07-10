@@ -10,6 +10,7 @@ use App\Jobs\CrawlKeywordJob;
 use App\Models\Keyword;
 use App\Services\KeywordService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 
@@ -19,11 +20,15 @@ class KeywordController extends Controller
         private readonly KeywordService $keywordService,
     ) {}
 
-    public function index(): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection
     {
+        $perPage = $request->validate([
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ])['per_page'] ?? 15;
+
         $keywords = Keyword::with(['thresholds', 'notificationChannels'])
             ->latest()
-            ->paginate();
+            ->paginate($perPage);
 
         return KeywordResource::collection($keywords);
     }
