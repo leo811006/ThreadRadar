@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thread Radar 隱私權政策</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem 5rem;
+    line-height: 1.75;
+    color: #1a1a1a;
+    background: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e5e5e5; background: #121212; }
+    a { color: #7dabf8; }
+    .updated { color: #9a9a9a; }
+    h2 { border-bottom-color: #333; }
+  }
+  h1 { font-size: 1.5rem; margin-bottom: 0.25rem; }
+  .updated { color: #666; font-size: 0.9rem; margin-top: 0; margin-bottom: 2rem; }
+  h2 { font-size: 1.1rem; margin-top: 2.25rem; border-bottom: 1px solid #e2e2e2; padding-bottom: 0.4rem; }
+  ul { padding-left: 1.3rem; }
+  li { margin-bottom: 0.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.92rem; }
+  th, td { border: 1px solid #d9d9d9; padding: 0.5rem 0.7rem; text-align: left; vertical-align: top; }
+  th { background: rgba(127,127,127,0.08); }
+  @media (prefers-color-scheme: dark) {
+    th, td { border-color: #3a3a3a; }
+  }
+  code { background: rgba(127,127,127,0.12); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.9em; }
+  a { color: #2563eb; }
+</style>
+</head>
+<body>
+
+<h1>Thread Radar 隱私權政策</h1>
+<p class="updated">最後更新日期：2026/07/10</p>
+
+<p>
+  「Thread Radar」（以下稱「本服務」）是一套內部使用的 Threads 關鍵字監測工具，用於協助管理者追蹤特定關鍵字在
+  Threads 平台上的公開貼文動態，並在符合設定門檻時發出通知。本服務<strong>目前僅為開發測試用途，未對外公開招募使用者</strong>。
+  本政策說明本服務在營運過程中會處理哪些資料、如何使用、以及使用者（管理者帳號）的權利。
+</p>
+
+<h2>1. 我們蒐集哪些資料</h2>
+<table>
+  <thead>
+    <tr><th>資料類型</th><th>說明</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Threads 公開貼文內容</td>
+      <td>依管理者設定的關鍵字，擷取 Threads 上<strong>公開可見</strong>的貼文資料，包含貼文內容、作者名稱與帳號、發文時間、圖片/影片連結、以及 Views／Likes／Replies／Reposts／Quotes 等公開互動數。</td>
+    </tr>
+    <tr>
+      <td>AI 分析結果</td>
+      <td>擷取到的貼文內容會送交 Google Gemini API 產生摘要、情緒判斷（正面／負面／中立）與標籤，分析結果會儲存於本服務資料庫。</td>
+    </tr>
+    <tr>
+      <td>管理者帳號資料</td>
+      <td>登入本服務所需的 Email 與密碼（雜湊儲存），僅供管理者本人存取後台使用，不對外公開。</td>
+    </tr>
+    <tr>
+      <td>通知管道設定</td>
+      <td>管理者可自行設定 Email、Discord、Slack、LINE、Telegram 或 Webhook 作為通知接收管道，相關設定值（如 Webhook URL）由管理者輸入並儲存於本服務資料庫，僅用於發送符合條件的通知。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  本服務<strong>不會</strong>蒐集 Threads 使用者的私訊、非公開貼文、密碼或任何需要登入該帳號才能存取的資料，
+  也不會代表任何 Threads 使用者發文、回覆或執行任何帳號操作。
+</p>
+
+<h2>2. 資料如何被使用</h2>
+<ul>
+  <li>依管理者設定的關鍵字與門檻條件，判斷貼文是否符合監測目標。</li>
+  <li>透過 AI 分析協助管理者快速掌握貼文內容摘要與情緒傾向。</li>
+  <li>在貼文符合設定門檻時，透過管理者指定的通知管道發送提醒。</li>
+  <li>提供後台儀表板供管理者查詢、篩選與檢視歷史監測結果。</li>
+</ul>
+<p>本服務不會將蒐集到的資料用於監測目的以外的其他用途，也不會出售、出租或轉讓給第三方作商業使用。</p>
+
+<h2>3. 第三方服務</h2>
+<p>本服務運作過程中會使用以下第三方服務，各自受其自身隱私權政策規範：</p>
+<ul>
+  <li><strong>Google Gemini API</strong>：用於分析貼文內容，產生摘要與情緒判斷。</li>
+  <li><strong>管理者自行設定的通知服務</strong>（Discord、Slack、LINE、Telegram、Email 或自訂 Webhook）：僅在貼文符合通知條件時，將貼文摘要資訊傳送至管理者指定的目的地。</li>
+</ul>
+
+<h2>4. 資料保留</h2>
+<p>
+  貼文資料與分析結果會持續保留於本服務資料庫，作為歷史查詢與統計之用，直到管理者手動刪除相關關鍵字設定或資料庫清除為止。
+  管理者帳號資料於帳號存續期間保留。
+</p>
+
+<h2>5. 資料安全</h2>
+<p>
+  本服務採用帳號密碼登入（密碼經雜湊處理儲存）搭配 session 驗證機制保護後台存取，僅限授權管理者登入使用。
+  通知管道的敏感設定值（如 Webhook URL、API 金鑰）於後台介面顯示時會遮蔽處理。
+</p>
+
+<h2>6. 使用者權利</h2>
+<p>
+  若您是本服務的管理者，您可以隨時透過後台介面新增、編輯或刪除關鍵字設定、通知管道設定，
+  刪除關鍵字設定亦會一併移除該關鍵字相關的監測紀錄。
+</p>
+<p>
+  若您是 Threads 平台上的內容作者，且您的公開貼文出現於本服務的監測結果中，您可透過下方聯絡方式向我們提出資料移除請求，
+  我們將於合理時間內處理。
+</p>
+
+<h2>7. 政策異動</h2>
+<p>本政策內容如有變更，將於本頁面更新「最後更新日期」並公告修改後的內容。建議定期查閱本頁面以掌握最新版本。</p>
+
+<h2>8. 聯絡我們</h2>
+<p>如對本隱私權政策有任何疑問，請透過本專案的 GitHub Repository 提出 Issue 與我們聯繫：</p>
+<p><a href="https://github.com/leo811006/ThreadRadar" target="_blank" rel="noopener">https://github.com/leo811006/ThreadRadar</a></p>
+
+</body>
+</html>
